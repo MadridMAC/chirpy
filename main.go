@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sync/atomic"
 )
@@ -24,6 +26,7 @@ func main() {
 	s_mux.Handle("/app/", api_cfg.middlewareMetricsInc(app_handler))
 	s_mux.HandleFunc("GET /admin/metrics", api_cfg.handlerMetricReqs)
 	s_mux.HandleFunc("POST /admin/reset", api_cfg.handlerMetricReset)
+	s_mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
 	s_mux.HandleFunc("GET /api/healthz", readinessHandler)
 
 	server := http.Server{
@@ -63,4 +66,67 @@ func (cfg *apiConfig) handlerMetricReset(w http.ResponseWriter, req *http.Reques
 	cfg.fileserverHits.Store(0)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Reset hits to 0"))
+}
+
+func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
+	type chirpBody struct {
+		Body string `json:"body"`
+	}
+
+	decoder := json.NewDecoder(req.Body)
+	chirp_body := chirpBody{}
+	err := decoder.Decode(&chirp_body)
+
+	type errorStruct struct {
+		Error string `json:"error"`
+	}
+
+	if err != nil {
+		error_struct := errorStruct{
+			Error: "Something went wrong",
+		}
+		data, err := json.Marshal(error_struct)
+		if err != nil {
+			log.Printf("Error marshalling JSON: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		w.Write(data)
+		return
+	}
+
+	if len(chirp_body.Body) > 140 {
+		error_struct := errorStruct{
+			Error: "Chirp is too long",
+		}
+		data, err := json.Marshal(error_struct)
+		if err != nil {
+			log.Printf("Error marshalling JSON: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		w.Write(data)
+		return
+	}
+
+	type validStruct struct {
+		Valid bool `json:"valid"`
+	}
+
+	valid_struct := validStruct{
+		Valid: true,
+	}
+	data, err := json.Marshal(valid_struct)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(data)
 }
