@@ -45,7 +45,8 @@ func main() {
 	s_mux.HandleFunc("GET /admin/metrics", api_cfg.handlerMetricReqs)
 	// s_mux.HandleFunc("POST /admin/reset", api_cfg.handlerMetricReset)
 	s_mux.HandleFunc("POST /admin/reset", api_cfg.deleteUsersHandler)
-	s_mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	//s_mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	s_mux.HandleFunc("POST /api/chirps", api_cfg.createChirpHandler)
 	s_mux.HandleFunc("POST /api/users", api_cfg.createUserHandler)
 	s_mux.HandleFunc("GET /api/healthz", readinessHandler)
 

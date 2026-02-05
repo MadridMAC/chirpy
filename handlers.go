@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
+	"github.com/MadridMAC/chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -37,15 +36,18 @@ func (cfg *apiConfig) handlerMetricReqs(w http.ResponseWriter, req *http.Request
 	</html>`, cfg.fileserverHits.Load())))
 }
 
+/*
 func (cfg *apiConfig) handlerMetricReset(w http.ResponseWriter, req *http.Request) {
 	cfg.fileserverHits.Store(0)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Reset hits to 0"))
 }
+*/
 
-func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
+func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, req *http.Request) {
 	type chirpBody struct {
-		Body string `json:"body"`
+		Body    string    `json:"body"`
+		User_Id uuid.UUID `json:"user_id"`
 	}
 
 	decoder := json.NewDecoder(req.Body)
@@ -64,15 +66,44 @@ func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// clean profane words from input using profanityChecker, then send 200 JSON response
-	cleanedBody := profanityChecker(chirp_body.Body)
-	type cleanStruct struct {
-		Cleaned_Body string `json:"cleaned_body"`
+	// legacy profanityChecker; unsure if still needed
+	// cleanedBody := profanityChecker(chirp_body.Body)
+
+	// debug info
+	// fmt.Printf("Chirp Body: %v\n", chirp_body.Body)
+	// fmt.Printf("Chirp UserID: %v\n", chirp_body.User_Id)
+
+	// if chirp is valid, save to DB
+	chirpParams := database.CreateChirpParams{
+		Body:   chirp_body.Body,
+		UserID: chirp_body.User_Id,
 	}
-	cleaned_struct := cleanStruct{
-		Cleaned_Body: cleanedBody,
+	chirp, err := cfg.databaseQueries.CreateChirp(req.Context(), chirpParams)
+	if err != nil {
+		respondWithError(w, 400, "Error occurred during Chirp creation: "+err.Error())
+		return
 	}
-	respondWithJSON(w, 200, cleaned_struct)
+
+	// create outputs truct for respondWithJSON
+	type responseStruct struct {
+		Id         uuid.UUID `json:"id"`
+		Created_At time.Time `json:"created_at"`
+		Updated_At time.Time `json:"updated_at"`
+		Body       string    `json:"body"`
+		User_Id    uuid.UUID `json:"user_id"`
+	}
+
+	output := responseStruct{
+		Id:         chirp.ID,
+		Created_At: chirp.CreatedAt,
+		Updated_At: chirp.UpdatedAt,
+		Body:       chirp.Body,
+		User_Id:    chirp.UserID,
+	}
+
+	// when successful, respond with HTTP 201 and full chirp resource
+	respondWithJSON(w, 201, output)
+
 }
 
 // createUserHandler
@@ -128,6 +159,7 @@ func (cfg *apiConfig) deleteUsersHandler(w http.ResponseWriter, req *http.Reques
 	}
 }
 
+/*
 func profanityChecker(body string) string {
 	profanity_list := []string{"kerfuffle", "sharbert", "fornax"}
 	splitAndLowered := strings.Split(body, " ")
@@ -139,3 +171,4 @@ func profanityChecker(body string) string {
 	cleanedWord := strings.Join(splitAndLowered, " ")
 	return cleanedWord
 }
+*/
